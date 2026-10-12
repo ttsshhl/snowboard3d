@@ -75,6 +75,22 @@ html,body{width:100%;height:100%;overflow:hidden;background:#cfe0f2;font-family:
 #langBtn span{padding:6px 7px;border-radius:14px;opacity:.6}
 #langBtn span.on{background:rgba(255,255,255,.9);color:#0d2a52;opacity:1}
 @media (max-width:600px){#score{font-size:28px}#spd{font-size:36px}#spdBar{width:120px}#nitro{width:120px}#speedo{bottom:auto;top:70px}.ctrl{font-size:12px}}
+@media (orientation:portrait){
+  #tL{left:12px;bottom:26px;width:78px;height:78px;font-size:30px}
+  #tR{left:98px;bottom:26px;width:78px;height:78px;font-size:30px}
+  #tD{right:12px;bottom:22px;width:86px;height:86px;font-size:14px}
+  #tT{right:14px;bottom:120px;width:68px;height:68px;font-size:11px}
+  #tJ{right:104px;bottom:104px;width:64px;height:64px;font-size:11px}
+  #tE{right:96px;bottom:178px;width:58px;height:58px;font-size:11px}
+  #speedo{top:112px!important;bottom:auto!important}
+  #spd{font-size:34px}#spdBar,#nitro{width:110px!important}
+  #hint{top:204px;max-width:92%;white-space:normal;text-align:center;font-size:14px}
+  #pops{top:30%}.pop{font-size:24px}
+  #score{font-size:28px}
+  .title{font-size:clamp(34px,11vw,56px)!important}
+  .screen .ctrl{font-size:13px;margin-top:18px}
+  .stats{font-size:17px}
+}
 </style>
 </head>
 <body>
@@ -151,7 +167,6 @@ window.addEventListener('error',function(e){if(window.__booted)return;var m=(e&&
   <button class="btn" id="againBtn">ЕЩЁ РАЗ</button>
 </div>
 
-<div id="rotate"><i>📱</i>Поверните устройство горизонтально</div>
 <div class="screen hidden" id="pause">
   <div class="title" style="font-size:clamp(36px,8vw,70px)">ПАУЗА</div>
   <button class="btn" id="resumeBtn">ПРОДОЛЖИТЬ</button>
@@ -1834,22 +1849,26 @@ function updateVisual(dt,t){
   for(const [,ch] of chunks)for(const k of ch.crystals)if(!k.taken){k.m.rotation.y=t*2+k.u;k.m.position.y=k.y+Math.sin(t*3+k.u)*0.12;}
 }
 const camPos=V(),camLook=V();let camAng=0,camInit=false;
+// вертикальный экран: чуть шире угол по вертикали, камера выше и дальше — виден склон впереди
+let PORT=innerHeight>innerWidth;
+function fv(f){if(!PORT)return f;return Math.min(104,f*(1+(1-Math.min(1,camera.aspect))*0.62));}
 function updateCamera(dt,t){
+  PORT=innerHeight>innerWidth;
   const sp=Math.hypot(P.vx,P.vu);
   const pp=TMP.set(P.x,P.y,-P.u);
   if(state==='menu'){camAng+=dt*0.12;const a=camAng;
-    camPos.set(H.x+Math.sin(a)*13,H.y+1.5+Math.sin(a*0.7)*1.2,-H.u+Math.cos(a)*13);camera.position.copy(camPos);camera.lookAt(H.x,H.y-0.6,-H.u);camera.fov=55;camera.updateProjectionMatrix();camInit=false;return;}
+    camPos.set(H.x+Math.sin(a)*13,H.y+1.5+Math.sin(a*0.7)*1.2,-H.u+Math.cos(a)*13);camera.position.copy(camPos);camera.lookAt(H.x,H.y-0.6,-H.u);camera.fov=fv(55);camera.updateProjectionMatrix();camInit=false;return;}
   if(state==='intro'&&P.jumped){const tx=P.x-8.5,tz=-(P.u+2.5),ty=Math.max(P.y+1.2,visH(tx,-tz)+1.4);
     camPos.x=damp(camPos.x,tx,4,dt);camPos.y=damp(camPos.y,ty,4,dt);camPos.z=damp(camPos.z,tz,4,dt);
-    camera.position.copy(camPos);camera.lookAt(P.x,P.y+0.5,-P.u-2);camera.fov=damp(camera.fov,64,3,dt);camera.updateProjectionMatrix();camInit=true;camAng=Math.atan2(P.vx,P.vu);return;}
+    camera.position.copy(camPos);camera.lookAt(P.x,P.y+0.5,-P.u-2);camera.fov=damp(camera.fov,fv(64),3,dt);camera.updateProjectionMatrix();camInit=true;camAng=Math.atan2(P.vx,P.vu);return;}
   if(state==='intro'&&!P.jumped){const tx=H.x-4.5,ty=H.y-1.6,tz=-(H.u+10);
     if(P.introT<dt*1.5)camPos.copy(camera.position);
     camPos.x=damp(camPos.x,tx,3,dt);camPos.y=damp(camPos.y,ty,3,dt);camPos.z=damp(camPos.z,tz,3,dt);
-    camera.position.copy(camPos);camera.lookAt(P.x,P.y+0.6,-P.u);camera.fov=damp(camera.fov,60,3,dt);camera.updateProjectionMatrix();camInit=true;camAng=0;return;}
+    camera.position.copy(camPos);camera.lookAt(P.x,P.y+0.6,-P.u);camera.fov=damp(camera.fov,fv(60),3,dt);camera.updateProjectionMatrix();camInit=true;camAng=0;return;}
   const va=sp>2?Math.atan2(P.vx,P.vu):P.yaw;
   if(!camInit){camAng=va;}
   camAng+=wrap(va-camAng)*(1-Math.exp(-(P.air?1.5:3.5)*dt));
-  const dist=6.4+sp*0.045,hgt=2.5+sp*0.02;
+  const dist=6.4+sp*0.045+(PORT?1.6:0),hgt=2.5+sp*0.02+(PORT?1.5:0);
   const dx=Math.sin(camAng),du=Math.cos(camAng);
   const tx=P.x-dx*dist,tu=P.u-du*dist;
   let ty=Math.max(P.y+hgt,visH(tx,tu)+1.3);
@@ -1859,9 +1878,9 @@ function updateCamera(dt,t){
   shake=Math.max(0,shake-dt*1.4);
   const sh=shake*0.25+(sp>24?(sp-24)*0.004:0);
   if(sh>0)camera.position.add(TMP2.set((Math.random()-.5)*sh,(Math.random()-.5)*sh,(Math.random()-.5)*sh));
-  camLook.set(P.x+dx*5,P.y+0.7-(sp*0.01),-(P.u+du*5));
+  const la=PORT?7.5:5;camLook.set(P.x+dx*la,P.y+0.7-(sp*0.01)-(PORT?1.8:0),-(P.u+du*la));
   camera.lookAt(camLook);
-  camera.fov=damp(camera.fov,clamp(62+sp*0.6+(P.boosting?9:0),62,98),P.boosting?5:3,dt);camera.updateProjectionMatrix();
+  camera.fov=damp(camera.fov,fv(clamp(62+sp*0.6+(P.boosting?9:0),62,98)),P.boosting?5:3,dt);camera.updateProjectionMatrix();
 }
 
 /* ================== HUD ================== */
@@ -1969,7 +1988,7 @@ function revive(){
   S.lives=3;updateLives();lastPU.u=P.u;state='play';acc=0;last=performance.now();camInit=false;popup('Продолжаем!','gold');
 }
 function ySave(){if(yPlayer)try{yPlayer.setData({best},true).catch(()=>{});}catch(e){}}
-function checkRotate(){const r=isTouch&&innerHeight>innerWidth*1.05;const el=$('rotate');if(el._on!==r){el._on=r;el.style.display=r?'flex':'none';if(r&&state==='play')togglePause();}}
+function checkRotate(){} // игра поддерживает и вертикальную, и горизонтальную ориентацию
 if(isTouch){$('ctrlTouch').style.display='';$('ctrlKeys').style.display='none';}
 // защита от прокрутки, выделения, контекстного меню и масштабирования
 ['contextmenu','selectstart','dragstart','gesturestart'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault()));
