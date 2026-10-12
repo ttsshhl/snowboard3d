@@ -78,6 +78,15 @@ html,body{width:100%;height:100%;overflow:hidden;background:#cfe0f2;font-family:
 </style>
 </head>
 <body>
+<div id="boot" style="position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0d2a52;color:#fff;font:20px system-ui,sans-serif;text-align:center;padding:20px">
+  <div id="bootT">Загрузка… / Loading…</div><div id="bootE" style="margin-top:14px;font-size:13px;opacity:.8;max-width:90%;word-break:break-word"></div>
+</div>
+<script>
+window.__booted=false;
+window.addEventListener('error',function(e){if(window.__booted)return;var m=(e&&e.message)||'';if(!m&&e&&e.target&&e.target.src)m='Не загрузился файл: '+e.target.src;
+  if(e&&e.target&&e.target.src&&/sdk\.js/.test(e.target.src))return;
+  var b=document.getElementById('bootE');if(b)b.textContent=(b.textContent?b.textContent+' | ':'')+m;},true);
+</script>
 <canvas id="c"></canvas>
 <div id="vig"></div>
 <div id="vigSlow"></div>
@@ -322,10 +331,15 @@ const GR=[0,0];
 
 /* ================== РЕНДЕР ================== */
 const canvas=document.getElementById('c');
-const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+// телефоны и планшеты: ниже разрешение рендера и тени — меньше нагрузка на память и видеочип
+const MOBILE=matchMedia('(pointer:coarse)').matches||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+if(typeof THREE==='undefined'){document.getElementById('bootT').textContent='Не найден файл three.min.js — загрузите его в ту же папку, что и index.html';throw new Error('three.min.js missing');}
+const renderer=new THREE.WebGLRenderer({canvas,antialias:!MOBILE,powerPreference:MOBILE?'default':'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,MOBILE?1.5:2));
 renderer.setSize(innerWidth,innerHeight);
-renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();const b=document.getElementById('boot');b.style.display='flex';
+  document.getElementById('bootT').textContent=(typeof LANG!=='undefined'&&LANG!=='ru')?'Graphics were reset by the device. Tap to restart.':'Видеопамять устройства сбросилась. Нажмите, чтобы перезапустить.';b.onclick=()=>location.reload();},false);
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=MOBILE?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;
 renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=0.86;
 const MAX_ANISO=renderer.capabilities.getMaxAnisotropy();
@@ -337,7 +351,7 @@ const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,0.15,7000);
 const SUN_DIR=new THREE.Vector3(0.62,0.52,-0.42).normalize();
 const hemi=new THREE.HemisphereLight(0xbdd6ff,0xffffff,0.18);scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xffeeda,1.6);
-sun.castShadow=true; sun.shadow.mapSize.set(2048,2048);
+sun.castShadow=true; sun.shadow.mapSize.set(MOBILE?1024:2048,MOBILE?1024:2048);
 Object.assign(sun.shadow.camera,{left:-30,right:30,top:30,bottom:-30,near:1,far:220});
 sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.035;
 scene.add(sun); scene.add(sun.target);
@@ -1238,14 +1252,17 @@ function buildBridge(b){
 /* ---------- медведь ---------- */
 // мех: тысячи волосков разных оттенков бурого, по ним же — рельеф (normal map)
 const FUR=(()=>{const S=512,c=document.createElement('canvas');c.width=c.height=S;const g=c.getContext('2d');const r=mulberry32(77);
-  g.fillStyle='#432714';g.fillRect(0,0,S,S);
-  const tones=['#22130a','#311c0e','#3f2514','#4f2f19','#5e3a1f','#6d4424','#7d4f29','#8f5c2f'];
-  g.lineCap='round';
+  // волоски рисуются прямо в массив пикселей (без canvas-штрихов — на телефонах это было очень медленно)
+  const tones=[[0x22,0x13,0x0a],[0x31,0x1c,0x0e],[0x3f,0x25,0x14],[0x4f,0x2f,0x19],[0x5e,0x3a,0x1f],[0x6d,0x44,0x24],[0x7d,0x4f,0x29],[0x8f,0x5c,0x2f]];
+  const R=new Float32Array(S*S).fill(0x43),Gc=new Float32Array(S*S).fill(0x27),Bc=new Float32Array(S*S).fill(0x14);
   for(let i=0;i<22000;i++){const x=r()*S,y=r()*S,len=5+r()*12,a=Math.PI/2+(r()-.5)*0.55;const t=Math.min(tones.length-1,Math.floor(Math.pow(r(),0.8)*tones.length));
-    g.strokeStyle=tones[t];g.globalAlpha=0.55+r()*0.45;g.lineWidth=0.8+r()*1.4;g.beginPath();g.moveTo(x,y);g.lineTo(x+Math.cos(a)*len,y+Math.sin(a)*len);g.stroke();
-    if(y+len>S){g.beginPath();g.moveTo(x,y-S);g.lineTo(x+Math.cos(a)*len,y-S+Math.sin(a)*len);g.stroke();}}
-  g.globalAlpha=1;
-  const im=g.getImageData(0,0,S,S).data,h=new Float32Array(S*S);for(let i=0;i<S*S;i++)h[i]=(im[i*4]*0.5+im[i*4+1]*0.4+im[i*4+2]*0.1)/255;
+    const al=0.55+r()*0.45,lw=0.8+r()*1.4,col=tones[t],dx=Math.cos(a),dy=Math.sin(a),nx=-dy,ny=dx,half=lw/2;
+    for(let d=0;d<=len;d+=0.6){const tip=1-Math.max(0,(d/len-0.7)/0.3)*0.6;
+      for(let o=-half;o<=half+0.01;o+=0.7){const px=((Math.round(x+dx*d+nx*o)%S)+S)%S,py=((Math.round(y+dy*d+ny*o)%S)+S)%S,k=py*S+px,aa=al*tip*0.85;
+        R[k]+=(col[0]-R[k])*aa;Gc[k]+=(col[1]-Gc[k])*aa;Bc[k]+=(col[2]-Bc[k])*aa;}}}
+  const id=g.createImageData(S,S),h=new Float32Array(S*S);
+  for(let k=0;k<S*S;k++){id.data[k*4]=R[k];id.data[k*4+1]=Gc[k];id.data[k*4+2]=Bc[k];id.data[k*4+3]=255;h[k]=(R[k]*0.5+Gc[k]*0.4+Bc[k]*0.1)/255;}
+  g.putImageData(id,0,0);
   const map=new THREE.CanvasTexture(c);map.wrapS=map.wrapT=THREE.RepeatWrapping;map.encoding=THREE.sRGBEncoding;map.anisotropy=MAX_ANISO;
   const nrm=heightToNormalTex(h,S,5);return{map,nrm};})();
 function furMaterial(tint,vc,rep){const m=FUR.map.clone(),n=FUR.nrm.clone();m.needsUpdate=n.needsUpdate=true;m.repeat.set(rep[0],rep[1]);n.repeat.set(rep[0],rep[1]);
@@ -1978,6 +1995,7 @@ resetStats();resetPlayer();ensureChunks(P.u,6);
 let last=performance.now(),acc=0;
 function loop(now){
   requestAnimationFrame(loop);
+  if(!window.__booted){window.__booted=true;const b=document.getElementById('boot');if(b)b.style.display='none';}
   const dtR=Math.min(0.05,(now-last)/1000);last=now;lastT=now;
   // замедление времени: на перилах игра идёт в 2 раза медленнее
   const slowOn=state==='play'&&P.crash<=0&&((P.grind&&!P.air)||(P.air&&P.airSlow)||(P.slowT||0)>0);if(P.slowT>0)P.slowT-=dtR;
